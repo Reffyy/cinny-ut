@@ -46,6 +46,10 @@ jobs:
           sudo apt install -y adb git python3 python3-pip python3-setuptools
           # Install Clickable system-wide so root can see it
           sudo pip install clickable-ut
+      - name: Mark Git repo as safe for root
+        run: |
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       
       - name: Build
         run: |
