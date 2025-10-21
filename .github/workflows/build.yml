@@ -40,15 +40,17 @@ jobs:
       - name: Parse version
         run: |
           echo ARTIFACT_VERSION=$(cat prebuild.sh | grep "export REPO_VERSION=" | awk -F'"' '$0=$2')$(cat prebuild.sh | grep "export CLICK_VERSION_PREFIX=" | awk -F'"' '$0=$2') >> $GITHUB_ENV
-      - name: Install clickable
+      - name: Install dependencies and Clickable
         run: |
           sudo apt update
           sudo apt install -y adb git python3 python3-pip python3-setuptools
-          sudo python3 -m pip install clickable-ut
-
+          # Install Clickable system-wide so root can see it
+          sudo pip install clickable-ut
+      
       - name: Build
         run: |
-          sudo python3 -m clickable build --arch ${{ matrix.arch }}
+          sudo clickable build --arch ${{ matrix.arch }}
+
 
 
       - name: Upload artifacts
