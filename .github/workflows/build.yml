@@ -6,16 +6,13 @@ on:
 
 jobs:
   build:
-    # Define environment variables instead of using a single-value matrix
     env:
       APP_NAME: cinny.danfro
 
     strategy:
       matrix:
-        # The matrix is now only used for variables that change, like architecture
         arch: [arm64]
 
-    # Corrected indentation for 'runs-on'
     runs-on: ubuntu-latest
 
     steps:
@@ -24,24 +21,26 @@ jobs:
         with:
           submodules: 'true'
 
-      # Extract versions needed for the setup-node action
-      - name: Extract Node version from prebuild.sh
+      # Step 1: Set up the correct Node.js version on the runner
+      - name: Extract Node version
         id: node_version
-        run: |
-          echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_OUTPUT
+        run: echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_OUTPUT
 
-      # Use the official action to set up the Node.js environment correctly
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ steps.node_version.outputs.NODE_VERSION }}
+          cache: 'npm' # Speeds up future builds by caching dependencies
 
-      # A simpler, more robust way to parse the version variables
-      - name: Parse artifact version
+      # Step 2: Run the actual build commands (e.g., npm install/build)
+      - name: Build web application
         run: |
-          source ./prebuild.sh
-          echo "ARTIFACT_VERSION=${REPO_VERSION}${CLICK_VERSION_PREFIX}" >> $GITHUB_ENV
+          # These commands must match what your prebuild.sh script does.
+          # This is just an example.
+          npm install
+          npm run build
 
+      # Step 3: Install Clickable
       - name: Install Clickable and dependencies
         run: |
           sudo apt-get update
@@ -49,15 +48,16 @@ jobs:
           python3 -m pip install --user clickable-ut
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Build Clickable package
+      # Step 4: Package the pre-built application using Clickable
+      # Clickable will now find the already-built files and package them.
+      - name: Package with Clickable
         run: |
           clickable build --arch ${{ matrix.arch }}
 
+      # Step 5: Upload the final .click file
       - name: Upload .click artifact
         uses: actions/upload-artifact@v4
         with:
-          # Use the environment variable for the artifact name
-          name: ${{ env.APP_NAME }}_${{ matrix.arch }}_${{ env.ARTIFACT_VERSION }}
-          # The clickable build command places the file in the project root by default
+          name: ${{ env.APP_NAME }}_${{ matrix.arch }}
           path: ./*.click
           if-no-files-found: error
