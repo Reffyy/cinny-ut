@@ -10,8 +10,6 @@ jobs:
       matrix:
         arch: [arm64]
         appname: [cinny.danfro]
-    # FIX 1: Corrected the indentation of 'runs-on'.
-    # It must be a direct child of the 'build' job, not part of the 'strategy'.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,11 +27,13 @@ jobs:
         run: |
           echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
 
+      # FIX: Reverted to reading the version from the file instead of executing it.
+      # This avoids running the script before its dependencies (like NVM) are installed.
       - name: Parse version
         run: |
-          # Using source is cleaner and less fragile than multiple grep/awk pipes.
-          source ./prebuild.sh
-          echo "ARTIFACT_VERSION=${REPO_VERSION}${CLICK_VERSION_PREFIX}" >> $GITHUB_ENV
+          REPO_VERSION=$(grep 'export REPO_VERSION=' prebuild.sh | cut -d'"' -f2)
+          CLICK_PREFIX=$(grep 'export CLICK_VERSION_PREFIX=' prebuild.sh | cut -d'"' -f2)
+          echo "ARTIFACT_VERSION=${REPO_VERSION}${CLICK_PREFIX}" >> $GITHUB_ENV
 
       - name: Install Clickable dependencies
         run: |
@@ -42,30 +42,23 @@ jobs:
           python3 -m pip install --user clickable-ut
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      # FIX 2: Combined Node.js setup and the build command into a single step.
-      # This ensures the shell that initializes NVM is the SAME shell that runs 'clickable'.
+      - name: Mark repository as safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Set up Node.js and Build inside container
         run: |
-          # --- This is your original Node.js setup ---
           export NVM_DIR="$HOME/.nvm"
-          # We use env.VAR_NAME to access variables set with $GITHUB_ENV
           curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${{ env.NVM_VERSION }}/install.sh" | bash
-          
-          # Source the nvm script to make the 'nvm' command available
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          
-          # Install and use the correct node version
           nvm install "${{ env.NODE_VERSION }}"
           nvm use "${{ env.NODE_VERSION }}"
           echo "Using $(node -v) and $(npm -v)"
-          
-          # --- Now run the build command in this same configured shell ---
           clickable build --arch ${{ matrix.arch }} --container
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          # Using the parsed version in the artifact name
           name: ${{ matrix.appname }}_${{ env.ARTIFACT_VERSION }}_${{ matrix.arch }}
           path: build/*/app/*.click
           if-no-files-found: error
+
