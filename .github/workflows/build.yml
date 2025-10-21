@@ -40,8 +40,8 @@ jobs:
           python3 -m pip install --user clickable-ut
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Mark repository as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Mark repository as safe for sudo
+        run: sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Set up Node.js and Build
         run: |
@@ -53,8 +53,7 @@ jobs:
           nvm use "${{ env.NODE_VERSION }}"
           echo "Using $(node -v) and $(npm -v)"
           
-          # FIX: Use the full path to the executable with sudo.
-          # This bypasses any PATH issues caused by sudo's secure_path policy.
+          # Use the full path to the executable with sudo.
           sudo -E $HOME/.local/bin/clickable build --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
