@@ -53,9 +53,9 @@ jobs:
           nvm use "${{ env.NODE_VERSION }}"
           echo "Using $(node -v) and $(npm -v)"
           
-          # FIX: Run clickable with sudo to resolve user ID mapping errors.
-          # The -E flag preserves the existing environment variables (like PATH and NVM_DIR).
-          sudo -E clickable build --arch ${{ matrix.arch }}
+          # FIX: Use the full path to the executable with sudo.
+          # This bypasses any PATH issues caused by sudo's secure_path policy.
+          sudo -E $HOME/.local/bin/clickable build --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
