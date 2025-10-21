@@ -27,8 +27,6 @@ jobs:
         run: |
           echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
 
-      # FIX: Reverted to reading the version from the file instead of executing it.
-      # This avoids running the script before its dependencies (like NVM) are installed.
       - name: Parse version
         run: |
           REPO_VERSION=$(grep 'export REPO_VERSION=' prebuild.sh | cut -d'"' -f2)
@@ -45,15 +43,19 @@ jobs:
       - name: Mark repository as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Set up Node.js and Build inside container
+      - name: Set up Node.js and Build
         run: |
+          # Set up the Node.js environment on the runner
           export NVM_DIR="$HOME/.nvm"
           curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${{ env.NVM_VERSION }}/install.sh" | bash
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           nvm install "${{ env.NODE_VERSION }}"
           nvm use "${{ env.NODE_VERSION }}"
           echo "Using $(node -v) and $(npm -v)"
-          clickable build --arch ${{ matrix.arch }} --container
+          
+          # FIX: Run the build on the runner itself, not in an isolated container.
+          # This ensures it uses the Node.js environment we just configured.
+          clickable build --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -61,4 +63,3 @@ jobs:
           name: ${{ matrix.appname }}_${{ env.ARTIFACT_VERSION }}_${{ matrix.arch }}
           path: build/*/app/*.click
           if-no-files-found: error
-
