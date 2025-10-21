@@ -47,7 +47,8 @@ jobs:
           echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
       - name: Build
         run: |
-          clickable build --arch ${{ matrix.arch }} --docker
+          sudo python3 -m clickable build --arch ${{ matrix.arch }}
+
 
       - name: Upload artifacts
         # upload the build artifacts to github using the appname and version
