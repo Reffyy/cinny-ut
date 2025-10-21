@@ -53,9 +53,9 @@ jobs:
           nvm use "${{ env.NODE_VERSION }}"
           echo "Using $(node -v) and $(npm -v)"
           
-          # FIX: Run the build on the runner itself, not in an isolated container.
-          # This ensures it uses the Node.js environment we just configured.
-          clickable build --arch ${{ matrix.arch }}
+          # FIX: Run clickable with sudo to resolve user ID mapping errors.
+          # The -E flag preserves the existing environment variables (like PATH and NVM_DIR).
+          sudo -E clickable build --arch ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -63,3 +63,4 @@ jobs:
           name: ${{ matrix.appname }}_${{ env.ARTIFACT_VERSION }}_${{ matrix.arch }}
           path: build/*/app/*.click
           if-no-files-found: error
+
