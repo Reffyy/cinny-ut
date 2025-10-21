@@ -1,4 +1,4 @@
-name: Build only
+name: Build Clickable App
 
 on:
   push:
@@ -6,54 +6,58 @@ on:
 
 jobs:
   build:
+    # Define environment variables instead of using a single-value matrix
+    env:
+      APP_NAME: cinny.danfro
+
     strategy:
       matrix:
+        # The matrix is now only used for variables that change, like architecture
         arch: [arm64]
-        appname: [cinny.danfro]
+
+    # Corrected indentation for 'runs-on'
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: 'true'
 
-      - name: Extract NVM version from prebuild.sh
-        id: extract-nvm-version
-        run: |
-          echo "NVM_VERSION=$(grep -oP '(?<=NVM_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
-
+      # Extract versions needed for the setup-node action
       - name: Extract Node version from prebuild.sh
-        id: extract-node-version
+        id: node_version
         run: |
-          echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
+          echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_OUTPUT
 
-      - name: Set up Node.js environment
-        run: |
-          export NVM_DIR="$HOME/.nvm"
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v$NVM_VERSION/install.sh | bash
-          . "$NVM_DIR/nvm.sh"
-          nvm install $NODE_VERSION
-          nvm use $NODE_VERSION
-          echo "Node.js $(node -v) installed via nvm"
+      # Use the official action to set up the Node.js environment correctly
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node_version.outputs.NODE_VERSION }}
 
-      - name: Parse version
+      # A simpler, more robust way to parse the version variables
+      - name: Parse artifact version
         run: |
-          echo ARTIFACT_VERSION=$(cat prebuild.sh | grep "export REPO_VERSION=" | awk -F'"' '$0=$2')$(cat prebuild.sh | grep "export CLICK_VERSION_PREFIX=" | awk -F'"' '$0=$2') >> $GITHUB_ENV
+          source ./prebuild.sh
+          echo "ARTIFACT_VERSION=${REPO_VERSION}${CLICK_VERSION_PREFIX}" >> $GITHUB_ENV
 
-      - name: Install Clickable dependencies
+      - name: Install Clickable and dependencies
         run: |
-          sudo apt update
-          sudo apt install -y adb git python3 python3-pip python3-setuptools
+          sudo apt-get update
+          sudo apt-get install -y adb git python3 python3-pip python3-setuptools
           python3 -m pip install --user clickable-ut
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Build inside container
+      - name: Build Clickable package
         run: |
-          clickable build --arch ${{ matrix.arch }} --container
+          clickable build --arch ${{ matrix.arch }}
 
-      - name: Upload artifacts
+      - name: Upload .click artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.appname }}_${{ matrix.arch }}
-          path: build/*/app/*.click
+          # Use the environment variable for the artifact name
+          name: ${{ env.APP_NAME }}_${{ matrix.arch }}_${{ env.ARTIFACT_VERSION }}
+          # The clickable build command places the file in the project root by default
+          path: ./*.click
           if-no-files-found: error
