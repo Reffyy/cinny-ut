@@ -40,8 +40,8 @@ jobs:
           python3 -m pip install --user clickable-ut
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Mark repository as safe for sudo
-        run: sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Change workspace ownership to root
+        run: sudo chown -R root:root "$GITHUB_WORKSPACE"
 
       - name: Set up Node.js and Build
         run: |
