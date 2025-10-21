@@ -1,4 +1,4 @@
-name: Build Clickable App
+name: Build only
 
 on:
   push:
@@ -6,58 +6,66 @@ on:
 
 jobs:
   build:
-    env:
-      APP_NAME: cinny.danfro
-
     strategy:
       matrix:
         arch: [arm64]
-
+        appname: [cinny.danfro]
+    # FIX 1: Corrected the indentation of 'runs-on'.
+    # It must be a direct child of the 'build' job, not part of the 'strategy'.
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: 'true'
 
-      # Step 1: Set up the correct Node.js version on the runner
-      - name: Extract Node version
-        id: node_version
-        run: echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_OUTPUT
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ steps.node_version.outputs.NODE_VERSION }}
-          cache: 'npm' # Speeds up future builds by caching dependencies
-
-      # Step 2: Run the actual build commands (e.g., npm install/build)
-      - name: Build web application
+      - name: Extract NVM version from prebuild.sh
+        id: extract-nvm-version
         run: |
-          # These commands must match what your prebuild.sh script does.
-          # This is just an example.
-          npm install
-          npm run build
+          echo "NVM_VERSION=$(grep -oP '(?<=NVM_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
 
-      # Step 3: Install Clickable
-      - name: Install Clickable and dependencies
+      - name: Extract Node version from prebuild.sh
+        id: extract-node-version
+        run: |
+          echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
+
+      - name: Parse version
+        run: |
+          # Using source is cleaner and less fragile than multiple grep/awk pipes.
+          source ./prebuild.sh
+          echo "ARTIFACT_VERSION=${REPO_VERSION}${CLICK_VERSION_PREFIX}" >> $GITHUB_ENV
+
+      - name: Install Clickable dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y adb git python3 python3-pip python3-setuptools
           python3 -m pip install --user clickable-ut
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      # Step 4: Package the pre-built application using Clickable
-      # Clickable will now find the already-built files and package them.
-      - name: Package with Clickable
+      # FIX 2: Combined Node.js setup and the build command into a single step.
+      # This ensures the shell that initializes NVM is the SAME shell that runs 'clickable'.
+      - name: Set up Node.js and Build inside container
         run: |
-          clickable build --arch ${{ matrix.arch }}
+          # --- This is your original Node.js setup ---
+          export NVM_DIR="$HOME/.nvm"
+          # We use env.VAR_NAME to access variables set with $GITHUB_ENV
+          curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${{ env.NVM_VERSION }}/install.sh" | bash
+          
+          # Source the nvm script to make the 'nvm' command available
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          
+          # Install and use the correct node version
+          nvm install "${{ env.NODE_VERSION }}"
+          nvm use "${{ env.NODE_VERSION }}"
+          echo "Using $(node -v) and $(npm -v)"
+          
+          # --- Now run the build command in this same configured shell ---
+          clickable build --arch ${{ matrix.arch }} --container
 
-      # Step 5: Upload the final .click file
-      - name: Upload .click artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}_${{ matrix.arch }}
-          path: ./*.click
+          # Using the parsed version in the artifact name
+          name: ${{ matrix.appname }}_${{ env.ARTIFACT_VERSION }}_${{ matrix.arch }}
+          path: build/*/app/*.click
           if-no-files-found: error
