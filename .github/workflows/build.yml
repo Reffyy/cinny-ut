@@ -1,16 +1,9 @@
 name: Build only
 
 on:
-  # start the script when code is pushed to main branch
   push:
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# define the build job
-# only build if
-# a) the keyword "run_ci" is part of the commit message
-# b) no tag was pushed, because with a pushed tag another workflow is tiggered
 jobs:
   build:
     strategy:
@@ -20,49 +13,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 # here @latest doesn't work, specific version v4 or above
+        uses: actions/checkout@v4
         with:
           submodules: 'true'
+
       - name: Extract NVM version from prebuild.sh
         id: extract-nvm-version
-        run: echo "NVM_VERSION=$(grep -oP '(?<=NVM_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
-      - name: Extract node version from prebuild.sh
+        run: |
+          echo "NVM_VERSION=$(grep -oP '(?<=NVM_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
+
+      - name: Extract Node version from prebuild.sh
         id: extract-node-version
-        run: echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
+        run: |
+          echo "NODE_VERSION=$(grep -oP '(?<=NODE_VERSION=)[^ ]+' prebuild.sh)" >> $GITHUB_ENV
+
       - name: Set up Node.js environment
         run: |
           export NVM_DIR="$HOME/.nvm"
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v$NVM_VERSION/install.sh | bash
-          . "$NVM_DIR/nvm.sh"  # Source nvm
+          . "$NVM_DIR/nvm.sh"
           nvm install $NODE_VERSION
           nvm use $NODE_VERSION
           echo "Node.js $(node -v) installed via nvm"
+
       - name: Parse version
         run: |
           echo ARTIFACT_VERSION=$(cat prebuild.sh | grep "export REPO_VERSION=" | awk -F'"' '$0=$2')$(cat prebuild.sh | grep "export CLICK_VERSION_PREFIX=" | awk -F'"' '$0=$2') >> $GITHUB_ENV
-      - name: Install dependencies and Clickable
+
+      - name: Install Clickable dependencies
         run: |
           sudo apt update
           sudo apt install -y adb git python3 python3-pip python3-setuptools
-          # Install Clickable system-wide so root can see it
-          sudo pip install clickable-ut
-      - name: Mark Git repo as safe for root
+          python3 -m pip install --user clickable-ut
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build inside container
         run: |
-          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      
-      - name: Build
-        run: |
-          sudo clickable build --arch ${{ matrix.arch }}
-
-
+          clickable build --arch ${{ matrix.arch }} --container
 
       - name: Upload artifacts
-        # upload the build artifacts to github using the appname and version
-        uses: actions/upload-artifact@v4 # here @latest doesn't work, specific version v4 or above
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.appname }}_${{ matrix.arch }}
-          # name: cinny.danfro_${{ env.ARTIFACT_VERSION }}_${{ matrix.arch }}.zip
           path: build/*/app/*.click
           if-no-files-found: error
-
